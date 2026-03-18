@@ -29,14 +29,14 @@ pipeline {
         // 🔹 DEBUG Stage to check token injection
         stage('Debug Sonar Token') {
             steps {
-                withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_AUTH_TOKEN')]) {
+                withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
                     sh '''
                     echo "Checking Sonar token injection..."
-                    if [ -z "$SONAR_AUTH_TOKEN" ]; then
-                        echo "❌ SONAR_AUTH_TOKEN is EMPTY"
+                    if [ -z "$SONAR_TOKEN" ]; then
+                        echo "❌ SONAR_TOKEN is EMPTY"
                         exit 1
                     else
-                        echo "✅ SONAR_AUTH_TOKEN is present"
+                        echo "✅ SONAR_TOKEN is present"
                     fi
                     '''
                 }
