@@ -27,12 +27,12 @@ pipeline {
             }
         }
 
-        stage('SonarQube Analysis') {
+   stage('SonarQube Analysis') {
     steps {
         withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_AUTH_TOKEN')]) {
             withSonarQubeEnv('SonarQube') {
                 sh '''
-                mvn sonar:sonar \
+                mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
                   -Dsonar.projectKey=my-app \
                   -Dsonar.login=$SONAR_AUTH_TOKEN
                 '''
