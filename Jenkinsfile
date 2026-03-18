@@ -31,7 +31,7 @@ pipeline {
             steps {
                 withCredentials([string(credentialsId: 'SONAR_AUTH_TOKEN', variable: 'SONAR_AUTH_TOKEN')]) {
                     // 'Sonar' must match your Jenkins SonarQube installation name
-                    withSonarQubeEnv('sonar') {
+                    withSonarQubeEnv('SonarQube') {
                         sh """
                             mvn sonar:sonar \
                                 -Dsonar.projectKey=my-app \
