@@ -33,7 +33,7 @@ pipeline {
                     mvn sonar:sonar \
                     -Dsonar.projectKey=my-app \
                     -Dsonar.host.url=http://192.168.0.100:9000 \
-                    -Dsonar.login=$SONAR_AUTH_TOKEN
+                    -Dsonar.login=$sonar-token
                     '''
                 }
             }
