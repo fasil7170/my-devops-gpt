@@ -8,15 +8,14 @@ pipeline {
     }
 
     tools {
-        maven 'maven3'   // Name from Jenkins Global Tool Config
-        git 'Default'    // Optional: configure Git in Global Tool Config
+        maven 'maven3'   
+        git 'Default'    
     }
 
     stages {
 
         stage('Checkout') {
             steps {
-                // Explicitly specify the branch 'main'
                 git branch: 'main', url: 'https://github.com/fasil7170/my-devops-gpt'
             }
         }
@@ -27,19 +26,36 @@ pipeline {
             }
         }
 
-   stage('SonarQube Analysis') {
-    steps {
-        withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_AUTH_TOKEN')]) {
-            withSonarQubeEnv('SonarQube') {
-                sh '''
-                mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
-                  -Dsonar.projectKey=my-app \
-                  -Dsonar.login=$SONAR_AUTH_TOKEN
-                '''
+        // 🔹 DEBUG Stage to check token injection
+        stage('Debug Sonar Token') {
+            steps {
+                withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_AUTH_TOKEN')]) {
+                    sh '''
+                    echo "Checking Sonar token injection..."
+                    if [ -z "$SONAR_AUTH_TOKEN" ]; then
+                        echo "❌ SONAR_AUTH_TOKEN is EMPTY"
+                        exit 1
+                    else
+                        echo "✅ SONAR_AUTH_TOKEN is present"
+                    fi
+                    '''
+                }
             }
         }
-    }
-}
+
+        stage('SonarQube Analysis') {
+            steps {
+                withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_AUTH_TOKEN')]) {
+                    withSonarQubeEnv('SonarQube') {
+                        sh '''
+                        mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
+                          -Dsonar.projectKey=my-app \
+                          -Dsonar.login=$SONAR_AUTH_TOKEN
+                        '''
+                    }
+                }
+            }
+        }
 
         stage('Quality Gate') {
             steps {
