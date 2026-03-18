@@ -5,14 +5,19 @@ pipeline {
         DOCKER_IMAGE = "fazil2664/app"
         IMAGE_TAG = "${BUILD_NUMBER}"
         NEXUS_URL = "http://192.168.0.100:8081"
-        SONARQUBE_SERVER = "sonar"
     }
 
     tools {
-        maven 'maven3'
+        maven 'maven3'   // Jenkins Global Tool Config
     }
 
     stages {
+
+        stage('Checkout') {
+            steps {
+                git 'https://github.com/fasil7170/my-devops-gpt'
+            }
+        }
 
         stage('Build & Unit Test') {
             steps {
@@ -23,12 +28,13 @@ pipeline {
         stage('SonarQube Analysis') {
             steps {
                 withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
-                    withSonarQubeEnv("${sonar}") {
+                    // 'SonarQube' must match the Jenkins SonarQube installation name
+                    withSonarQubeEnv('SonarQube') {
                         sh """
-                        mvn sonar:sonar \
-                        -Dsonar.projectKey=my-app \
-                        -Dsonar.host.url=http://192.168.0.100:9000 \
-                        -Dsonar.login=$SONAR_TOKEN
+                            mvn sonar:sonar \
+                                -Dsonar.projectKey=my-app \
+                                -Dsonar.host.url=http://192.168.0.100:9000 \
+                                -Dsonar.login=$SONAR_TOKEN
                         """
                     }
                 }
@@ -63,10 +69,10 @@ pipeline {
                     passwordVariable: 'NEXUS_PASS'
                 )]) {
                     sh """
-                    mvn deploy \
-                    -Dnexus.url=$NEXUS_URL \
-                    -Dnexus.username=$NEXUS_USER \
-                    -Dnexus.password=$NEXUS_PASS
+                        mvn deploy \
+                        -Dnexus.url=$NEXUS_URL \
+                        -Dnexus.username=$NEXUS_USER \
+                        -Dnexus.password=$NEXUS_PASS
                     """
                 }
             }
@@ -92,8 +98,8 @@ pipeline {
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
                     sh """
-                    echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
-                    docker push $DOCKER_IMAGE:$IMAGE_TAG
+                        echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                        docker push $DOCKER_IMAGE:$IMAGE_TAG
                     """
                 }
             }
@@ -113,12 +119,11 @@ pipeline {
                     passwordVariable: 'GIT_PASS'
                 )]) {
                     sh """
-                    git config user.name "jenkins"
-                    git config user.email "jenkins@example.com"
-
-                    git add k8s-manifests/deployment.yaml
-                    git commit -m "Update image to $IMAGE_TAG" || echo "No changes"
-                    git push https://$GIT_USER:$GIT_PASS@github.com/fasil7170/my-devops-gpt.git main
+                        git config user.name "jenkins"
+                        git config user.email "jenkins@example.com"
+                        git add .
+                        git commit -m "Update image to $IMAGE_TAG" || echo "No changes to commit"
+                        git push https://$GIT_USER:$GIT_PASS@github.com/fasil7170/my-devops-gpt.git main
                     """
                 }
             }
