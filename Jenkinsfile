@@ -43,19 +43,20 @@ pipeline {
             }
         }
 
-        stage('SonarQube Analysis') {
-            steps {
-                withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_AUTH_TOKEN')]) {
-                    withSonarQubeEnv('SonarQube') {
-                        sh '''
-                        mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
-                          -Dsonar.projectKey=my-app \
-                          -Dsonar.login=$SONAR_AUTH_TOKEN
-                        '''
-                    }
-                }
+       stage('SonarQube Analysis') {
+    steps {
+        withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
+            withSonarQubeEnv('SonarQube') {   // Must match the Jenkins SonarQube installation name
+                sh """
+                    mvn sonar:sonar \
+                        -Dsonar.projectKey=my-app \
+                        -Dsonar.host.url=http://192.168.0.100:9000 \
+                        -Dsonar.login=$SONAR_TOKEN
+                """
             }
         }
+    }
+}
 
         stage('Quality Gate') {
             steps {
