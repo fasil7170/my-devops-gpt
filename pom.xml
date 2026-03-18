@@ -1,0 +1,23 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" ...>
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.demo</groupId>
+  <artifactId>app</artifactId>
+  <version>1.0</version>
+
+  <build>
+    <plugins>
+      <plugin>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.8.1</version>
+      </plugin>
+    </plugins>
+  </build>
+
+  <distributionManagement>
+    <repository>
+      <id>nexus</id>
+      <url>http://192.168.0.100:8081/repository/maven-releases/</url>
+    </repository>
+  </distributionManagement>
+</project>
