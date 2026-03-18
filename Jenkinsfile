@@ -5,7 +5,7 @@ pipeline {
         DOCKER_IMAGE = "fazil2664/app"
         IMAGE_TAG = "${BUILD_NUMBER}"
         NEXUS_URL = "http://192.168.0.100:8081"
-        SONARQUBE_SERVER = "Sonar"
+        SONARQUBE_SERVER = "sonar"
     }
 
     tools {
