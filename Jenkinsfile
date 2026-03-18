@@ -29,14 +29,14 @@ pipeline {
 
         stage('SonarQube Analysis') {
             steps {
-                withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
+                withCredentials([string(credentialsId: 'SONAR_AUTH_TOKEN', variable: 'SONAR_AUTH_TOKEN')]) {
                     // 'Sonar' must match your Jenkins SonarQube installation name
                     withSonarQubeEnv('Sonar') {
                         sh """
                             mvn sonar:sonar \
                                 -Dsonar.projectKey=my-app \
                                 -Dsonar.host.url=http://192.168.0.100:9000 \
-                                -Dsonar.login=$SONAR_TOKEN
+                                -Dsonar.login=$SONAR_AUTH_TOKEN
                         """
                     }
                 }
