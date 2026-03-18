@@ -27,28 +27,16 @@ pipeline {
         }
 
         // 🔹 DEBUG Stage to check token injection
-        stage('SonarQube Analysis') {
+     stage('SonarQube Analysis') {
     steps {
-        // Inject your Jenkins secret token
         withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_AUTH_TOKEN')]) {
-
-            // Make sure the name matches your Jenkins SonarQube installation exactly
             withSonarQubeEnv('SonarQube') {
-
-                // Use triple double quotes for Groovy string interpolation
                 sh """
-                echo "🔒 Running SonarQube Analysis with token"
-                if [ -z "$SONAR_AUTH_TOKEN" ]; then
-                    echo "❌ SONAR_AUTH_TOKEN is empty!"
-                    exit 1
-                else
-                    echo "✅ SONAR_AUTH_TOKEN is present"
-                fi
-
+                echo "Using token: ${SONAR_AUTH_TOKEN:0:4}****"
                 mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
-                    -Dsonar.projectKey=my-app \
-                    -Dsonar.host.url=$SONAR_HOST_URL \
-                    -Dsonar.login=$SONAR_AUTH_TOKEN
+                  -Dsonar.projectKey=my-app \
+                  -Dsonar.host.url=$SONAR_HOST_URL \
+                  -Dsonar.login=$SONAR_AUTH_TOKEN
                 """
             }
         }
