@@ -8,14 +8,16 @@ pipeline {
     }
 
     tools {
-        maven 'maven3'   // Jenkins Global Tool Config
+        maven 'maven3'   // Name from Jenkins Global Tool Config
+        git 'Default'    // Optional: configure Git in Global Tool Config
     }
 
     stages {
 
         stage('Checkout') {
             steps {
-                git 'https://github.com/fasil7170/my-devops-gpt'
+                // Explicitly specify the branch 'main'
+                git branch: 'main', url: 'https://github.com/fasil7170/my-devops-gpt'
             }
         }
 
@@ -28,8 +30,8 @@ pipeline {
         stage('SonarQube Analysis') {
             steps {
                 withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
-                    // 'SonarQube' must match the Jenkins SonarQube installation name
-                    withSonarQubeEnv('SonarQube') {
+                    // 'Sonar' must match your Jenkins SonarQube installation name
+                    withSonarQubeEnv('Sonar') {
                         sh """
                             mvn sonar:sonar \
                                 -Dsonar.projectKey=my-app \
