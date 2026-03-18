@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_IMAGE = "your-dockerhub-username/app"
+        DOCKER_IMAGE = "fazil2664/app"
         IMAGE_TAG = "${BUILD_NUMBER}"
         NEXUS_URL = "http://192.168.0.100:8081"
         SONARQUBE_SERVER = "SonarQube"
@@ -16,7 +16,7 @@ pipeline {
 
         stage('Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/your-repo.git'
+                git branch: 'main', url: 'https://github.com/fasil7170/my-devops-gpt'
             }
         }
 
