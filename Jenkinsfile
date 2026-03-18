@@ -27,37 +27,33 @@ pipeline {
         }
 
         // 🔹 DEBUG Stage to check token injection
-        stage('Debug Sonar Token') {
-            steps {
-                withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
-                    sh '''
-                    echo "Checking Sonar token injection..."
-                    if [ -z "$SONAR_TOKEN" ]; then
-                        echo "❌ SONAR_TOKEN is EMPTY"
-                        exit 1
-                    else
-                        echo "✅ SONAR_TOKEN is present"
-                    fi
-                    '''
-                }
-            }
-        }
-
-       stage('SonarQube Analysis') {
+        stage('SonarQube Analysis') {
     steps {
-        withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
-            withSonarQubeEnv('SonarQube') {   // Must match the Jenkins SonarQube installation name
+        // Inject your Jenkins secret token
+        withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_AUTH_TOKEN')]) {
+
+            // Make sure the name matches your Jenkins SonarQube installation exactly
+            withSonarQubeEnv('SonarQube') {
+
+                // Use triple double quotes for Groovy string interpolation
                 sh """
-                    mvn sonar:sonar \
-                        -Dsonar.projectKey=my-app \
-                        -Dsonar.host.url=http://192.168.0.100:9000 \
-                        -Dsonar.login=$SONAR_TOKEN
+                echo "🔒 Running SonarQube Analysis with token"
+                if [ -z "$SONAR_AUTH_TOKEN" ]; then
+                    echo "❌ SONAR_AUTH_TOKEN is empty!"
+                    exit 1
+                else
+                    echo "✅ SONAR_AUTH_TOKEN is present"
+                fi
+
+                mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
+                    -Dsonar.projectKey=my-app \
+                    -Dsonar.host.url=$SONAR_HOST_URL \
+                    -Dsonar.login=$SONAR_AUTH_TOKEN
                 """
             }
         }
     }
 }
-
         stage('Quality Gate') {
             steps {
                 timeout(time: 2, unit: 'MINUTES') {
