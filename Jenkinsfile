@@ -1,8 +1,9 @@
 pipeline {
     agent {
-        docker {
-            image 'my-jenkins-agent:latest'  // the agent image built above
-            args '-v /var/run/docker.sock:/var/run/docker.sock'
+        kubernetes {
+            label 'k8s-agent'
+            yamlFile 'jenkins-agent-pod.yaml'
+            defaultContainer 'build'
         }
     }
 
@@ -13,35 +14,36 @@ pipeline {
         PATH = "/usr/bin:${env.PATH}"
     }
 
-    tools {
-        maven 'maven3'
-        git 'Default'
-    }
-
     stages {
 
         stage('Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/fasil7170/my-devops-gpt'
+                container('build') {
+                    git branch: 'main', url: 'https://github.com/fasil7170/my-devops-gpt'
+                }
             }
         }
 
         stage('Build & Unit Test') {
             steps {
-                sh 'mvn clean verify'
+                container('build') {
+                    sh 'mvn clean verify'
+                }
             }
         }
 
         stage('SonarQube Analysis') {
             steps {
-                withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_AUTH_TOKEN')]) {
-                    withSonarQubeEnv('SonarQube') {
-                        sh """
-                            mvn clean verify org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
-                                -Dsonar.projectKey=my-app \
-                                -Dsonar.host.url=$SONAR_HOST_URL \
-                                -Dsonar.login=$SONAR_AUTH_TOKEN
-                        """
+                container('build') {
+                    withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_AUTH_TOKEN')]) {
+                        withSonarQubeEnv('SonarQube') {
+                            sh """
+                                mvn clean verify org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
+                                    -Dsonar.projectKey=my-app \
+                                    -Dsonar.host.url=$SONAR_HOST_URL \
+                                    -Dsonar.login=$SONAR_AUTH_TOKEN
+                            """
+                        }
                     }
                 }
             }
@@ -49,90 +51,106 @@ pipeline {
 
         stage('Quality Gate') {
             steps {
-                timeout(time: 10, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
+                container('build') {
+                    timeout(time: 10, unit: 'MINUTES') {
+                        waitForQualityGate abortPipeline: true
+                    }
                 }
             }
         }
 
         stage('Trivy FS Scan') {
             steps {
-                sh '''
-                    docker run --rm -v $PWD:/app aquasec/trivy fs --exit-code 1 --severity HIGH,CRITICAL /app
-                '''
+                container('build') {
+                    sh 'trivy fs --exit-code 1 --severity HIGH,CRITICAL .'
+                }
             }
         }
 
         stage('Package') {
             steps {
-                sh 'mvn clean package -DskipTests'
+                container('build') {
+                    sh 'mvn clean package -DskipTests'
+                }
             }
         }
 
         stage('Upload to Nexus') {
             steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'nexus-creds',
-                    usernameVariable: 'NEXUS_USER',
-                    passwordVariable: 'NEXUS_PASS'
-                )]) {
-                    sh """
-                        mvn deploy \
-                            -Dnexus.url=$NEXUS_URL \
-                            -Dnexus.username=$NEXUS_USER \
-                            -Dnexus.password=$NEXUS_PASS
-                    """
+                container('build') {
+                    withCredentials([usernamePassword(
+                        credentialsId: 'nexus-creds',
+                        usernameVariable: 'NEXUS_USER',
+                        passwordVariable: 'NEXUS_PASS'
+                    )]) {
+                        sh """
+                            mvn deploy \
+                                -Dnexus.url=$NEXUS_URL \
+                                -Dnexus.username=$NEXUS_USER \
+                                -Dnexus.password=$NEXUS_PASS
+                        """
+                    }
                 }
             }
         }
 
         stage('Docker Build') {
             steps {
-                sh "docker build -t $DOCKER_IMAGE:$IMAGE_TAG ."
+                container('build') {
+                    sh "docker build -t $DOCKER_IMAGE:$IMAGE_TAG ."
+                }
             }
         }
 
         stage('Trivy Image Scan') {
             steps {
-                sh "trivy image --exit-code 1 --severity HIGH,CRITICAL $DOCKER_IMAGE:$IMAGE_TAG"
+                container('build') {
+                    sh "trivy image --exit-code 1 --severity HIGH,CRITICAL $DOCKER_IMAGE:$IMAGE_TAG"
+                }
             }
         }
 
         stage('Docker Login & Push') {
             steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'docker-creds',
-                    usernameVariable: 'DOCKER_USER',
-                    passwordVariable: 'DOCKER_PASS'
-                )]) {
-                    sh """
-                        echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
-                        docker push $DOCKER_IMAGE:$IMAGE_TAG
-                    """
+                container('build') {
+                    withCredentials([usernamePassword(
+                        credentialsId: 'docker-creds',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )]) {
+                        sh """
+                            echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                            docker push $DOCKER_IMAGE:$IMAGE_TAG
+                        """
+                    }
                 }
             }
         }
 
         stage('Update K8s Manifest') {
             steps {
-                sh "sed -i 's|image:.*|image: $DOCKER_IMAGE:$IMAGE_TAG|g' k8s-manifests/deployment.yaml"
+                container('build') {
+                    sh "sed -i 's|image:.*|image: $DOCKER_IMAGE:$IMAGE_TAG|g' k8s-manifests/deployment.yaml"
+                }
             }
         }
 
         stage('Push to Git') {
             steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'git-creds',
-                    usernameVariable: 'GIT_USER',
-                    passwordVariable: 'GIT_PASS'
-                )]) {
-                    sh """
-                        git config user.name "jenkins"
-                        git config user.email "jenkins@example.com"
-                        git add .
-                        git commit -m "Update image to $IMAGE_TAG" || echo "No changes to commit"
-                        git push https://$GIT_USER:$GIT_PASS@github.com/fasil7170/my-devops-gpt.git main
-                    """
+                container('build') {
+                    withCredentials([usernamePassword(
+                        credentialsId: 'git-creds',
+                        usernameVariable: 'GIT_USER',
+                        passwordVariable: 'GIT_PASS'
+                    )]) {
+                        sh """
+                            git config user.name "jenkins"
+                            git config user.email "jenkins@example.com"
+                            git add .
+                            git commit -m "Update image to $IMAGE_TAG" || echo "No changes to commit"
+                            git push https://$GIT_USER:$GIT_PASS@github.com/fasil7170/my-devops-gpt.git main
+                        """
+                    }
                 }
             }
         }
