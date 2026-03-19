@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    jenkins-agent: "true"
+spec:
+  containers:
+  - name: jnlp
+    image: jenkins/inbound-agent:latest
+    args: ["$(JENKINS_SECRET)", "$(JENKINS_NAME)"]
+    env:
+      - name: JENKINS_AGENT_WORKDIR
+        value: /home/jenkins/agent
+    volumeMounts:
+      - name: workspace-volume
+        mountPath: /home/jenkins/agent
+  - name: build
+    image: my-jenkins-agent:latest   # Dockerfile we created earlier
+    command: ["cat"]
+    tty: true
+    volumeMounts:
+      - name: workspace-volume
+        mountPath: /home/jenkins/agent
+  volumes:
+    - name: workspace-volume
+      emptyDir: {}
