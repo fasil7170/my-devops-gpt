@@ -27,17 +27,17 @@ pipeline {
         }
 
         // 🔹 DEBUG Stage to check token injection
-     stage('SonarQube Analysis') {
+    stage('SonarQube Analysis') {
     steps {
         withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_AUTH_TOKEN')]) {
             withSonarQubeEnv('SonarQube') {
-                sh """
-                echo "Using token: ${SONAR_AUTH_TOKEN}****"
-                mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
-                  -Dsonar.projectKey=my-app \
-                  -Dsonar.host.url=$SONAR_HOST_URL \
-                  -Dsonar.login=$SONAR_AUTH_TOKEN
-                """
+                sh '''
+                    echo "Running SonarQube analysis..."
+                    mvn org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
+                      -Dsonar.projectKey=my-app \
+                      -Dsonar.host.url=$SONAR_HOST_URL \
+                      -Dsonar.login=$SONAR_AUTH_TOKEN
+                '''
             }
         }
     }
