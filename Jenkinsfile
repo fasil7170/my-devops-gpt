@@ -5,6 +5,7 @@ pipeline {
         DOCKER_IMAGE = "fazil2664/app"
         IMAGE_TAG = "${BUILD_NUMBER}"
         NEXUS_URL = "http://192.168.0.100:8081"
+        PATH = "/usr/bin:${env.PATH}" // Ensure docker is found
     }
 
     tools {
@@ -51,12 +52,13 @@ pipeline {
         }
 
         stage('Trivy FS Scan') {
-    steps {
-        sh '''
-        docker run --rm -v $(pwd):/app aquasec/trivy fs --exit-code 1 --severity HIGH,CRITICAL /app
-        '''
-           }
-      }
+            steps {
+                sh '''
+                    export PATH=/usr/bin:$PATH
+                    docker run --rm -v $PWD:/app aquasec/trivy fs --exit-code 1 --severity HIGH,CRITICAL /app
+                '''
+            }
+        }
 
         stage('Package') {
             steps {
@@ -83,13 +85,19 @@ pipeline {
 
         stage('Docker Build') {
             steps {
-                sh "docker build -t $DOCKER_IMAGE:$IMAGE_TAG ."
+                sh '''
+                    export PATH=/usr/bin:$PATH
+                    docker build -t $DOCKER_IMAGE:$IMAGE_TAG .
+                '''
             }
         }
 
         stage('Trivy Image Scan') {
             steps {
-                sh "trivy image --exit-code 1 --severity HIGH,CRITICAL $DOCKER_IMAGE:$IMAGE_TAG"
+                sh '''
+                    export PATH=/usr/bin:$PATH
+                    trivy image --exit-code 1 --severity HIGH,CRITICAL $DOCKER_IMAGE:$IMAGE_TAG
+                '''
             }
         }
 
@@ -100,10 +108,11 @@ pipeline {
                     usernameVariable: 'DOCKER_USER',
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
-                    sh """
+                    sh '''
+                        export PATH=/usr/bin:$PATH
                         echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
                         docker push $DOCKER_IMAGE:$IMAGE_TAG
-                    """
+                    '''
                 }
             }
         }
