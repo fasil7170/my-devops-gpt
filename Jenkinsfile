@@ -1,16 +1,21 @@
 pipeline {
-    agent any
+    agent {
+        docker {
+            image 'my-jenkins-agent:latest'  // the agent image built above
+            args '-v /var/run/docker.sock:/var/run/docker.sock'
+        }
+    }
 
     environment {
         DOCKER_IMAGE = "fazil2664/app"
         IMAGE_TAG = "${BUILD_NUMBER}"
         NEXUS_URL = "http://192.168.0.100:8081"
-        PATH = "/usr/bin:${env.PATH}" // Ensure docker is found
+        PATH = "/usr/bin:${env.PATH}"
     }
 
     tools {
-        maven 'maven3'   
-        git 'Default'    
+        maven 'maven3'
+        git 'Default'
     }
 
     stages {
@@ -32,11 +37,10 @@ pipeline {
                 withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_AUTH_TOKEN')]) {
                     withSonarQubeEnv('SonarQube') {
                         sh """
-                            echo "Running SonarQube analysis..."
                             mvn clean verify org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar \
-                              -Dsonar.projectKey=my-app \
-                              -Dsonar.host.url=$SONAR_HOST_URL \
-                              -Dsonar.login=$SONAR_AUTH_TOKEN
+                                -Dsonar.projectKey=my-app \
+                                -Dsonar.host.url=$SONAR_HOST_URL \
+                                -Dsonar.login=$SONAR_AUTH_TOKEN
                         """
                     }
                 }
@@ -54,7 +58,6 @@ pipeline {
         stage('Trivy FS Scan') {
             steps {
                 sh '''
-                    export PATH=/usr/bin:$PATH
                     docker run --rm -v $PWD:/app aquasec/trivy fs --exit-code 1 --severity HIGH,CRITICAL /app
                 '''
             }
@@ -75,9 +78,9 @@ pipeline {
                 )]) {
                     sh """
                         mvn deploy \
-                        -Dnexus.url=$NEXUS_URL \
-                        -Dnexus.username=$NEXUS_USER \
-                        -Dnexus.password=$NEXUS_PASS
+                            -Dnexus.url=$NEXUS_URL \
+                            -Dnexus.username=$NEXUS_USER \
+                            -Dnexus.password=$NEXUS_PASS
                     """
                 }
             }
@@ -85,19 +88,13 @@ pipeline {
 
         stage('Docker Build') {
             steps {
-                sh '''
-                    export PATH=/usr/bin:$PATH
-                    docker build -t $DOCKER_IMAGE:$IMAGE_TAG .
-                '''
+                sh "docker build -t $DOCKER_IMAGE:$IMAGE_TAG ."
             }
         }
 
         stage('Trivy Image Scan') {
             steps {
-                sh '''
-                    export PATH=/usr/bin:$PATH
-                    trivy image --exit-code 1 --severity HIGH,CRITICAL $DOCKER_IMAGE:$IMAGE_TAG
-                '''
+                sh "trivy image --exit-code 1 --severity HIGH,CRITICAL $DOCKER_IMAGE:$IMAGE_TAG"
             }
         }
 
@@ -108,11 +105,10 @@ pipeline {
                     usernameVariable: 'DOCKER_USER',
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
-                    sh '''
-                        export PATH=/usr/bin:$PATH
+                    sh """
                         echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
                         docker push $DOCKER_IMAGE:$IMAGE_TAG
-                    '''
+                    """
                 }
             }
         }
