@@ -51,10 +51,12 @@ pipeline {
         }
 
         stage('Trivy FS Scan') {
-            steps {
-                sh 'trivy fs --exit-code 1 --severity HIGH,CRITICAL .'
-            }
-        }
+    steps {
+        sh '''
+        docker run --rm -v $(pwd):/app aquasec/trivy fs --exit-code 1 --severity HIGH,CRITICAL /app
+        '''
+           }
+      }
 
         stage('Package') {
             steps {
