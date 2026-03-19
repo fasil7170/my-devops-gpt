@@ -2,8 +2,29 @@ pipeline {
     agent {
         kubernetes {
             label 'k8s-agent'
-            yamlFile 'jenkins-agent-pod.yaml'
             defaultContainer 'build'
+            yaml """
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+  - name: jnlp
+    image: jenkins/inbound-agent:latest
+    args: ['\$(JENKINS_SECRET)', '\$(JENKINS_NAME)']
+    volumeMounts:
+    - mountPath: /home/jenkins/agent
+      name: workspace-volume
+  - name: build
+    image: my-jenkins-agent:latest
+    command: ['cat']
+    tty: true
+    volumeMounts:
+    - mountPath: /home/jenkins/agent
+      name: workspace-volume
+  volumes:
+  - name: workspace-volume
+    emptyDir: {}
+            """
         }
     }
 
@@ -154,5 +175,6 @@ pipeline {
                 }
             }
         }
+
     }
 }
