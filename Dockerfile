@@ -1,27 +1,16 @@
-# jenkins-agent.Dockerfile
-FROM ubuntu:22.04
+# jenkins-agent.Dockerfile (FIXED)
 
-# Install base tools
-RUN apt-get update && apt-get install -y \
-    openjdk-17-jdk \
-    maven \
-    git \
-    curl \
-    wget \
-    docker.io \
-    unzip \
-    bash \
-    && apt-get clean
+FROM maven:3.9.9-eclipse-temurin-17
 
-# Install Trivy
-RUN wget https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.44.3_Linux-64bit.deb \
-    && dpkg -i trivy_0.44.3_Linux-64bit.deb \
-    && rm trivy_0.44.3_Linux-64bit.deb
+USER root
 
-# Set PATH
-ENV PATH=/usr/bin:$PATH
+# Copy Docker CLI (no internet needed)
+COPY --from=docker:24.0.5 /usr/local/bin/docker /usr/local/bin/docker
 
-# Optional: create a Jenkins user
+# Create Jenkins user
 RUN useradd -ms /bin/bash jenkins
+
 USER jenkins
 WORKDIR /home/jenkins
+
+ENV PATH=/usr/local/bin:$PATH
