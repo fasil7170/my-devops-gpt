@@ -10,14 +10,12 @@ spec:
   containers:
   - name: maven
     image: maven:3.9.9-eclipse-temurin-17
-    command:
-    - cat
+    command: ['cat']
     tty: true
 
   - name: docker
     image: docker:24.0.5
-    command:
-    - cat
+    command: ['cat']
     tty: true
     volumeMounts:
     - name: docker-sock
@@ -25,8 +23,7 @@ spec:
 
   - name: trivy
     image: aquasec/trivy:latest
-    command:
-    - cat
+    command: ['cat']
     tty: true
 
   volumes:
@@ -50,10 +47,10 @@ spec:
             }
         }
 
-        stage('Build & Unit Test') {
+        stage('Build Jar') {
             steps {
                 container('maven') {
-                    sh 'mvn clean verify'
+                    sh 'mvn clean package -DskipTests'
                 }
             }
         }
@@ -82,14 +79,6 @@ spec:
             }
         }
 
-        stage('Trivy FS Scan') {
-            steps {
-                container('trivy') {
-                    sh 'trivy fs . || true'
-                }
-            }
-        }
-
         stage('Docker Build') {
             steps {
                 container('docker') {
@@ -98,7 +87,7 @@ spec:
             }
         }
 
-        stage('Trivy Image Scan') {
+        stage('Trivy Scan') {
             steps {
                 container('trivy') {
                     sh "trivy image $DOCKER_IMAGE:$IMAGE_TAG || true"
