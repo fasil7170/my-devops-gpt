@@ -44,11 +44,6 @@ spec:
 
     stages {
 
-    stage('Clean Workspace') {
-        steps {
-            deleteDir()
-        }
-
         stage('Checkout') {
             steps {
                 git branch: 'main', url: 'https://github.com/fasil7170/my-devops-gpt'
