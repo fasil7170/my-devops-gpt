@@ -1,16 +1,13 @@
-# jenkins-agent.Dockerfile (FIXED)
+# Build stage
+FROM maven:3.9.9-eclipse-temurin-17 AS build
+WORKDIR /app
+COPY . .
+RUN mvn clean package -DskipTests
 
-FROM maven:3.9.9-eclipse-temurin-17
+# Run stage
+FROM eclipse-temurin:17-jdk
+WORKDIR /app
+COPY --from=build /app/target/*.jar app.jar
 
-USER root
-
-# Copy Docker CLI (no internet needed)
-COPY --from=docker:24.0.5 /usr/local/bin/docker /usr/local/bin/docker
-
-# Create Jenkins user
-RUN useradd -ms /bin/bash jenkins
-
-USER jenkins
-WORKDIR /home/jenkins
-
-ENV PATH=/usr/local/bin:$PATH
+EXPOSE 8080
+CMD ["java", "-jar", "app.jar"]
