@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: my-app
-          image: fazil2664/app:latest   # 👈 Jenkins will update this
+          image: fazil2664/app:69   # 👈 Jenkins will update this
           imagePullPolicy: Always       # 👈 IMPORTANT
           ports:
             - containerPort: 8080
