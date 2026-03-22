@@ -2,6 +2,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: my-app
+  labels:
+    app: my-app
 spec:
   replicas: 2
   selector:
@@ -14,6 +16,14 @@ spec:
     spec:
       containers:
         - name: my-app
-          image: your-dockerhub/app:latest
+          image: fazil2664/app:latest   # 👈 Jenkins will update this
+          imagePullPolicy: Always       # 👈 IMPORTANT
           ports:
             - containerPort: 8080
+          resources:                   # 👈 best practice
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
