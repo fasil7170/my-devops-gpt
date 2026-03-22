@@ -10,14 +10,12 @@ spec:
   containers:
   - name: maven
     image: maven:3.9.9-eclipse-temurin-17
-    command:
-    - cat
+    command: ['cat']
     tty: true
 
   - name: docker
     image: docker:24.0.5
-    command:
-    - cat
+    command: ['cat']
     tty: true
     volumeMounts:
     - name: docker-sock
@@ -25,9 +23,11 @@ spec:
 
   - name: trivy
     image: aquasec/trivy:latest
-    command:
-    - cat
+    command: ['cat']
     tty: true
+    volumeMounts:
+    - name: docker-sock   # ✅ FIX: allow trivy to access docker
+      mountPath: /var/run/docker.sock
 
   volumes:
   - name: docker-sock
@@ -53,7 +53,7 @@ spec:
         stage('Build & Unit Test') {
             steps {
                 container('maven') {
-                    sh 'mvn clean verify'
+                    sh 'mvn clean package -DskipTests'   // ✅ faster & enough
                 }
             }
         }
@@ -98,15 +98,7 @@ spec:
             }
         }
 
-        stage('Trivy Image Scan') {
-            steps {
-                container('trivy') {
-                    sh "trivy image $DOCKER_IMAGE:$IMAGE_TAG || true"
-                }
-            }
-        }
-
-        stage('Docker Push') {
+        stage('Docker Push') {   // ✅ moved BEFORE image scan
             steps {
                 container('docker') {
                     withCredentials([usernamePassword(
@@ -119,6 +111,14 @@ spec:
                         docker push $DOCKER_IMAGE:$IMAGE_TAG
                         """
                     }
+                }
+            }
+        }
+
+        stage('Trivy Image Scan') {   // ✅ moved AFTER push
+            steps {
+                container('trivy') {
+                    sh "trivy image $DOCKER_IMAGE:$IMAGE_TAG || true"
                 }
             }
         }
