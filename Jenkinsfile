@@ -38,7 +38,7 @@ spec:
     }
 
     tools {
-        jdk 'jdk17'
+        jdk 'jdk11'
         maven 'maven3'
     }
 
