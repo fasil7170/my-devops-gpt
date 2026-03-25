@@ -15,7 +15,7 @@ spec:
     tty: true
 
   - name: docker
-    image: docker:24.0.5
+    image: docker:24.0
     command:
     - cat
     tty: true
@@ -24,7 +24,7 @@ spec:
       mountPath: /var/run/docker.sock
 
   - name: trivy
-    image: aquasec/trivy:latest
+    image: aquasec/trivy:0.50.0
     command:
     - cat
     tty: true
@@ -37,23 +37,43 @@ spec:
         }
     }
 
+    tools {
+        jdk 'jdk17'
+        maven 'maven3'
+    }
+
     environment {
-        DOCKER_IMAGE = "fazil2664/app"
-        IMAGE_TAG = "${BUILD_NUMBER}"
+        SCANNER_HOME = tool 'sonar-scanner'
     }
 
     stages {
 
-        stage('Checkout') {
+        stage('Git Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/fasil7170/my-devops-gpt'
+                git branch: 'main', credentialsId: 'git-cred', url: 'https://github.com/fasil7170/Boardgame.git'
             }
         }
 
-        stage('Build & Unit Test') {
+        stage('Compile') {
             steps {
                 container('maven') {
-                    sh 'mvn clean verify'
+                    sh "mvn compile"
+                }
+            }
+        }
+
+        stage('Test') {
+            steps {
+                container('maven') {
+                    sh "mvn test"
+                }
+            }
+        }
+
+        stage('File System Scan') {
+            steps {
+                container('trivy') {
+                    sh "trivy fs --format table -o trivy-fs-report.html ."
                 }
             }
         }
@@ -61,63 +81,50 @@ spec:
         stage('SonarQube Analysis') {
             steps {
                 container('maven') {
-                    withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_AUTH_TOKEN')]) {
-                        withSonarQubeEnv('SonarQube') {
-                            sh """
-                            mvn sonar:sonar \
-                            -Dsonar.projectKey=my-app \
-                            -Dsonar.login=$SONAR_AUTH_TOKEN
-                            """
-                        }
+                    withSonarQubeEnv('sonar') {
+                        sh '''$SCANNER_HOME/bin/sonar-scanner \
+                        -Dsonar.projectName=BoardGame \
+                        -Dsonar.projectKey=BoardGame \
+                        -Dsonar.java.binaries=.'''
                     }
                 }
             }
         }
 
-        stage('Quality Gate') {
+        stage('Build') {
             steps {
-                timeout(time: 10, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: false
+                container('maven') {
+                    sh "mvn package"
                 }
             }
         }
 
-        stage('Trivy FS Scan') {
-            steps {
-                container('trivy') {
-                    sh 'trivy fs . || true'
-                }
-            }
-        }
-
-        stage('Docker Build') {
+        stage('Docker Build & Push') {
             steps {
                 container('docker') {
-                    sh "docker build -t $DOCKER_IMAGE:$IMAGE_TAG ."
-                }
-            }
-        }
-
-        stage('Trivy Image Scan') {
-            steps {
-                container('trivy') {
-                    sh "trivy image $DOCKER_IMAGE:$IMAGE_TAG || true"
-                }
-            }
-        }
-
-        stage('Docker Push') {
-            steps {
-                container('docker') {
-                    withCredentials([usernamePassword(
-                        credentialsId: 'docker-creds',
-                        usernameVariable: 'DOCKER_USER',
-                        passwordVariable: 'DOCKER_PASS'
-                    )]) {
+                    withDockerRegistry(credentialsId: 'docker-cred', toolName: 'docker') {
                         sh """
-                        echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
-                        docker push $DOCKER_IMAGE:$IMAGE_TAG
+                        docker build -t fazil2664/boardshack:latest .
+                        docker push fazil2664/boardshack:latest
                         """
+                    }
+                }
+            }
+        }
+
+        stage('Docker Image Scan') {
+            steps {
+                container('trivy') {
+                    sh "trivy image --format table -o trivy-image-report.html fazil2664/boardshack:latest"
+                }
+            }
+        }
+
+        stage('Deploy To Kubernetes') {
+            steps {
+                container('maven') {
+                    withKubeConfig(credentialsId: 'k8-cred') {
+                        sh "kubectl apply -f deployment-service.yaml"
                     }
                 }
             }
