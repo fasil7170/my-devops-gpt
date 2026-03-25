@@ -99,18 +99,18 @@ spec:
             }
         }
 
-        stage('Docker Build & Push') {
-            steps {
+      stage('Docker Build & Push') {
+         steps {
                 container('docker') {
-                    withDockerRegistry(credentialsId: 'docker-cred', toolName: 'docker') {
-                        sh """
-                        docker build -t fazil2664/boardshack:latest .
-                        docker push fazil2664/boardshack:latest
-                        """
-                    }
-                }
-            }
-        }
+                withDockerRegistry(credentialsId: 'docker-cred') {
+                sh """
+                docker build -t fazil2664/boardshack:latest .
+                docker push fazil2664/boardshack:latest
+                """
+              }
+          }
+      }
+   }
 
         stage('Docker Image Scan') {
             steps {
