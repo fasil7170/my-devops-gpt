@@ -1,32 +1,44 @@
 pipeline {
-    agent any
+    agent {
+        kubernetes {
+            label 'devops-agent'
+            defaultContainer 'maven'
+            yaml """
+apiVersion: v1
+kind: Pod
+spec:
+  containers:
+  - name: maven
+    image: maven:3.9.9-eclipse-temurin-17
+    command: ['cat']
+    tty: true
 
-    tools {
-        maven 'maven3'  // Ensure this matches your Jenkins tool name
+  - name: docker
+    image: docker:24.0
+    command: ['cat']
+    tty: true
+    volumeMounts:
+    - name: docker-sock
+      mountPath: /var/run/docker.sock
+
+  - name: trivy
+    image: aquasec/trivy:0.50.0
+    command: ['cat']
+    tty: true
+
+  volumes:
+  - name: docker-sock
+    hostPath:
+      path: /var/run/docker.sock
+"""
+        }
     }
 
     environment {
-        // Detect JAVA_HOME dynamically for the agent
-        JAVA_HOME = ''
-        PATH = "${env.JAVA_HOME}/bin:${env.PATH}"
         SCANNER_HOME = tool 'sonar-scanner'
     }
 
     stages {
-        stage('Verify Tools') {
-            steps {
-                script {
-                    // Dynamically detect JAVA_HOME
-                    env.JAVA_HOME = sh(script: "readlink -f \$(which javac) | sed 's:/bin/javac::'", returnStdout: true).trim()
-                    env.PATH = "${env.JAVA_HOME}/bin:${env.PATH}"
-                }
-                sh '''
-                    echo "JAVA_HOME=${JAVA_HOME}"
-                    java -version
-                    mvn -version
-                '''
-            }
-        }
 
         stage('Git Checkout') {
             steps {
@@ -36,64 +48,75 @@ pipeline {
             }
         }
 
+        stage('Verify Java') {
+            steps {
+                container('maven') {
+                    sh "java -version"
+                    sh "mvn -version"
+                }
+            }
+        }
+
         stage('Compile') {
             steps {
-                sh "mvn compile"
+                container('maven') {
+                    sh "mvn clean compile"
+                }
             }
         }
 
         stage('Test') {
             steps {
-                sh "mvn test"
+                container('maven') {
+                    sh "mvn test"
+                }
             }
         }
 
         stage('File System Scan') {
             steps {
-                sh "trivy fs --format table -o trivy-fs-report.html ."
+                container('trivy') {
+                    sh "trivy fs --format table -o trivy-fs-report.html ."
+                }
             }
         }
 
         stage('SonarQube Analysis') {
             steps {
-                withSonarQubeEnv('sonar') {
-                    sh """
+                container('maven') {
+                    withSonarQubeEnv('sonar') {
+                        sh """
                         $SCANNER_HOME/bin/sonar-scanner \
                         -Dsonar.projectName=BoardGame \
                         -Dsonar.projectKey=BoardGame \
                         -Dsonar.java.binaries=.
-                    """
-                }
-            }
-        }
-
-        stage('Quality Gate') {
-            steps {
-                script {
-                    waitForQualityGate abortPipeline: false, credentialsId: 'sonar-token'
+                        """
+                    }
                 }
             }
         }
 
         stage('Build') {
             steps {
-                sh "mvn package"
-            }
-        }
-
-        stage('Publish To Nexus') {
-            steps {
-                withMaven(globalMavenSettingsConfig: 'global-settings', jdk: '', maven: 'maven3', traceability: true) {
-                    sh "mvn deploy"
+                container('maven') {
+                    sh "mvn package"
                 }
             }
         }
 
-        stage('Build & Tag Docker Image') {
+        stage('Docker Build & Push') {
             steps {
-                script {
-                    withDockerRegistry(credentialsId: 'docker-cred', toolName: 'docker') {
-                        sh "docker build -t fazil2664/boardshack:latest ."
+                container('docker') {
+                    withCredentials([usernamePassword(
+                        credentialsId: 'docker-cred',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )]) {
+                        sh """
+                        echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
+                        docker build -t fazil2664/boardshack:latest .
+                        docker push fazil2664/boardshack:latest
+                        """
                     }
                 }
             }
@@ -101,49 +124,31 @@ pipeline {
 
         stage('Docker Image Scan') {
             steps {
-                sh "trivy image --format table -o trivy-image-report.html fazil2664/boardshack:latest"
-            }
-        }
-
-        stage('Push Docker Image') {
-            steps {
-                script {
-                    withDockerRegistry(credentialsId: 'docker-cred', toolName: 'docker') {
-                        sh "docker push fazil2664/boardshack:latest"
-                    }
+                container('trivy') {
+                    sh "trivy image --format table -o trivy-image-report.html fazil2664/boardshack:latest"
                 }
             }
         }
 
         stage('Deploy To Kubernetes') {
             steps {
-                withKubeConfig(
-                    credentialsId: 'k8-cred',
-                    namespace: 'webapps',
-                    serverUrl: 'https://192.168.0.100:6443'
-                ) {
-                    sh "kubectl apply -f deployment-service.yaml"
+                container('maven') {
+                    withKubeConfig(credentialsId: 'k8-cred') {
+                        sh "kubectl apply -f deployment-service.yaml"
+                    }
                 }
             }
         }
 
         stage('Verify Deployment') {
             steps {
-                withKubeConfig(
-                    credentialsId: 'k8-cred',
-                    namespace: 'webapps',
-                    serverUrl: 'https://192.168.0.100:6443'
-                ) {
-                    sh "kubectl get pods -n webapps"
-                    sh "kubectl get svc -n webapps"
+                container('maven') {
+                    withKubeConfig(credentialsId: 'k8-cred') {
+                        sh "kubectl get pods -n webapps"
+                        sh "kubectl get svc -n webapps"
+                    }
                 }
             }
-        }
-    }
-
-    post {
-        always {
-            echo "Pipeline finished with status: ${currentBuild.currentResult}"
         }
     }
 }
