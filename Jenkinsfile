@@ -10,12 +10,14 @@ spec:
   containers:
   - name: maven
     image: maven:3.9.9-eclipse-temurin-17
-    command: ['cat']
+    command:
+    - cat
     tty: true
 
   - name: docker
     image: docker:24.0.5
-    command: ['cat']
+    command:
+    - cat
     tty: true
     volumeMounts:
     - name: docker-sock
@@ -23,11 +25,9 @@ spec:
 
   - name: trivy
     image: aquasec/trivy:latest
-    command: ['cat']
+    command:
+    - cat
     tty: true
-    volumeMounts:
-    - name: docker-sock   # ✅ FIX: allow trivy to access docker
-      mountPath: /var/run/docker.sock
 
   volumes:
   - name: docker-sock
@@ -53,7 +53,7 @@ spec:
         stage('Build & Unit Test') {
             steps {
                 container('maven') {
-                    sh 'mvn clean package -DskipTests'   // ✅ faster & enough
+                    sh 'mvn clean verify'
                 }
             }
         }
@@ -98,27 +98,27 @@ spec:
             }
         }
 
-        stage('Docker Push') {
-    steps {
-        container('docker') {
-            withCredentials([usernamePassword(
-                credentialsId: 'docker-creds',
-                usernameVariable: 'DOCKER_USER',
-                passwordVariable: 'DOCKER_PASS'
-            )]) {
-                sh '''
-                echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-                docker push $DOCKER_IMAGE:$IMAGE_TAG
-                '''
-            }
-         }
-      }
- }
-
-        stage('Trivy Image Scan') {   // ✅ moved AFTER push
+        stage('Trivy Image Scan') {
             steps {
                 container('trivy') {
                     sh "trivy image $DOCKER_IMAGE:$IMAGE_TAG || true"
+                }
+            }
+        }
+
+        stage('Docker Push') {
+            steps {
+                container('docker') {
+                    withCredentials([usernamePassword(
+                        credentialsId: 'docker-creds',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )]) {
+                        sh """
+                        echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                        docker push $DOCKER_IMAGE:$IMAGE_TAG
+                        """
+                    }
                 }
             }
         }
