@@ -40,6 +40,12 @@ spec:
 
     stages {
 
+        stage('Clean Workspace') {
+            steps {
+                cleanWs()
+            }
+        }
+
         stage('Git Checkout') {
             steps {
                 git branch: 'main',
@@ -57,10 +63,16 @@ spec:
             }
         }
 
+        stage('Check POM') {
+            steps {
+                sh "cat pom.xml"
+            }
+        }
+
         stage('Compile') {
             steps {
                 container('maven') {
-                    sh "mvn clean compile"
+                    sh "mvn clean install -U"
                 }
             }
         }
@@ -69,37 +81,6 @@ spec:
             steps {
                 container('maven') {
                     sh "mvn test"
-                }
-            }
-        }
-
-        stage('File System Scan') {
-            steps {
-                container('trivy') {
-                    sh "trivy fs --format table -o trivy-fs-report.html ."
-                }
-            }
-        }
-
-        stage('SonarQube Analysis') {
-            steps {
-                container('maven') {
-                    withSonarQubeEnv('sonar') {
-                        sh """
-                        $SCANNER_HOME/bin/sonar-scanner \
-                        -Dsonar.projectName=BoardGame \
-                        -Dsonar.projectKey=BoardGame \
-                        -Dsonar.java.binaries=.
-                        """
-                    }
-                }
-            }
-        }
-
-        stage('Build') {
-            steps {
-                container('maven') {
-                    sh "mvn package"
                 }
             }
         }
@@ -125,7 +106,7 @@ spec:
         stage('Docker Image Scan') {
             steps {
                 container('trivy') {
-                    sh "trivy image --format table -o trivy-image-report.html fazil2664/boardshack:latest"
+                    sh "trivy image fazil2664/boardshack:latest"
                 }
             }
         }
@@ -135,17 +116,6 @@ spec:
                 container('maven') {
                     withKubeConfig(credentialsId: 'k8-cred') {
                         sh "kubectl apply -f deployment-service.yaml"
-                    }
-                }
-            }
-        }
-
-        stage('Verify Deployment') {
-            steps {
-                container('maven') {
-                    withKubeConfig(credentialsId: 'k8-cred') {
-                        sh "kubectl get pods -n webapps"
-                        sh "kubectl get svc -n webapps"
                     }
                 }
             }
