@@ -10,14 +10,12 @@ spec:
   containers:
   - name: maven
     image: maven:3.9.9-eclipse-temurin-17
-    command:
-    - cat
+    command: ['cat']
     tty: true
 
   - name: docker
     image: docker:24.0
-    command:
-    - cat
+    command: ['cat']
     tty: true
     volumeMounts:
     - name: docker-sock
@@ -25,8 +23,7 @@ spec:
 
   - name: trivy
     image: aquasec/trivy:0.50.0
-    command:
-    - cat
+    command: ['cat']
     tty: true
 
   volumes:
@@ -50,7 +47,9 @@ spec:
 
         stage('Git Checkout') {
             steps {
-                git branch: 'main', credentialsId: 'git-cred', url: 'https://github.com/fasil7170/Boardgame.git'
+                git branch: 'main',
+                    credentialsId: 'git-cred',
+                    url: 'https://github.com/fasil7170/Boardgame.git'
             }
         }
 
@@ -82,10 +81,12 @@ spec:
             steps {
                 container('maven') {
                     withSonarQubeEnv('sonar') {
-                        sh '''$SCANNER_HOME/bin/sonar-scanner \
+                        sh """
+                        $SCANNER_HOME/bin/sonar-scanner \
                         -Dsonar.projectName=BoardGame \
                         -Dsonar.projectKey=BoardGame \
-                        -Dsonar.java.binaries=.'''
+                        -Dsonar.java.binaries=.
+                        """
                     }
                 }
             }
@@ -99,18 +100,23 @@ spec:
             }
         }
 
-      stage('Docker Build & Push') {
-         steps {
+        stage('Docker Build & Push') {
+            steps {
                 container('docker') {
-                withDockerRegistry(credentialsId: 'docker-cred') {
-                sh """
-                docker build -t fazil2664/boardshack:latest .
-                docker push fazil2664/boardshack:latest
-                """
-              }
-          }
-      }
-   }
+                    withCredentials([usernamePassword(
+                        credentialsId: 'docker-cred',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_PASS'
+                    )]) {
+                        sh """
+                        echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
+                        docker build -t fazil2664/boardshack:latest .
+                        docker push fazil2664/boardshack:latest
+                        """
+                    }
+                }
+            }
+        }
 
         stage('Docker Image Scan') {
             steps {
@@ -128,6 +134,28 @@ spec:
                     }
                 }
             }
+        }
+
+        stage('Verify Deployment') {
+            steps {
+                container('maven') {
+                    withKubeConfig(credentialsId: 'k8-cred') {
+                        sh "kubectl get pods -n webapps"
+                        sh "kubectl get svc -n webapps"
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            emailext (
+                subject: "Build: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: "Check build at ${env.BUILD_URL}",
+                to: 'rkf@gmail.com',
+                attachmentsPattern: 'trivy-image-report.html'
+            )
         }
     }
 }
