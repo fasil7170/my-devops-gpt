@@ -3,6 +3,7 @@ pipeline {
         kubernetes {
             label 'devops-agent'
             defaultContainer 'maven'
+            reuseNode true
             yaml """
 apiVersion: v1
 kind: Pod
@@ -10,14 +11,12 @@ spec:
   containers:
   - name: maven
     image: maven:3.9.9-eclipse-temurin-17
-    command:
-    - cat
+    command: ['cat']
     tty: true
 
   - name: docker
     image: docker:24.0.5
-    command:
-    - cat
+    command: ['cat']
     tty: true
     volumeMounts:
     - name: docker-sock
@@ -25,8 +24,7 @@ spec:
 
   - name: trivy
     image: aquasec/trivy:latest
-    command:
-    - cat
+    command: ['cat']
     tty: true
 
   volumes:
@@ -93,7 +91,9 @@ spec:
         stage('Docker Build') {
             steps {
                 container('docker') {
-                    sh "docker build -t $DOCKER_IMAGE:$IMAGE_TAG ."
+                    sh """
+                    docker build -t $DOCKER_IMAGE:$IMAGE_TAG .
+                    """
                 }
             }
         }
