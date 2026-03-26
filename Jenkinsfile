@@ -14,81 +14,126 @@ containers:
   command: ['cat']
   tty: true
 
-* name: kaniko
-  image: gcr.io/kaniko-project/executor:latest
+* name: docker
+  image: docker:24.0.5
   command: ['cat']
   tty: true
   volumeMounts:
 
-  * name: kaniko-secret
-    mountPath: /kaniko/.docker
+  * name: docker-sock
+    mountPath: /var/run/docker.sock
 
 * name: trivy
-  image: aquasec/trivy:0.50.0
+  image: aquasec/trivy:latest
   command: ['cat']
   tty: true
 
 volumes:
 
-* name: kaniko-secret
-  secret:
-  secretName: docker-cred
+* name: docker-sock
+  hostPath:
+  path: /var/run/docker.sock
   """
   }
   }
 
   environment {
-  IMAGE = "fazil2664/boardshack:${BUILD_NUMBER}"
+  DOCKER_IMAGE = "fazil2664/app"
+  IMAGE_TAG = "${BUILD_NUMBER}"
+  FULL_IMAGE = "${DOCKER_IMAGE}:${IMAGE_TAG}"
   }
 
   stages {
 
-  
+  ```
   stage('Checkout') {
       steps {
-          git branch: 'main',
-              credentialsId: 'git-cred',
-              url: 'https://github.com/fasil7170/Boardgame.git'
+          retry(2) {
+              git branch: 'main',
+                  url: 'https://github.com/fasil7170/my-devops-gpt'
+          }
       }
   }
 
-  stage('Build') {
+  stage('Build & Unit Test') {
       steps {
           container('maven') {
-              sh "mvn clean package -DskipTests"
+              sh 'mvn clean verify'
           }
       }
   }
 
-  stage('Docker Build & Push') {
+  stage('SonarQube Analysis') {
       steps {
-          container('kaniko') {
-              sh """
-              /kaniko/executor \
-                --dockerfile=Dockerfile \
-                --context=. \
-                --destination=\$IMAGE \
-                --insecure \
-                --skip-tls-verify
-              """
+          container('maven') {
+              withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_AUTH_TOKEN')]) {
+                  withSonarQubeEnv('SonarQube') {
+                      sh """
+                      mvn sonar:sonar \
+                      -Dsonar.projectKey=my-app \
+                      -Dsonar.login=\$SONAR_AUTH_TOKEN
+                      """
+                  }
+              }
           }
       }
   }
 
-  stage('Scan (Non-blocking)') {
+  stage('Quality Gate') {
+      steps {
+          timeout(time: 10, unit: 'MINUTES') {
+              waitForQualityGate abortPipeline: false
+          }
+      }
+  }
+
+  stage('Trivy FS Scan') {
       steps {
           container('trivy') {
-              sh "trivy image \$IMAGE || true"
+              sh 'trivy fs . || true'
           }
       }
   }
 
-  stage('Deploy') {
+  stage('Docker Build') {
+      steps {
+          container('docker') {
+              sh "docker build -t \$FULL_IMAGE ."
+          }
+      }
+  }
+
+  stage('Trivy Image Scan') {
+      steps {
+          container('trivy') {
+              sh "trivy image \$FULL_IMAGE || true"
+          }
+      }
+  }
+
+  stage('Docker Push') {
+      steps {
+          container('docker') {
+              withCredentials([usernamePassword(
+                  credentialsId: 'docker-creds',
+                  usernameVariable: 'DOCKER_USER',
+                  passwordVariable: 'DOCKER_PASS'
+              )]) {
+                  sh """
+                  echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
+                  docker push \$FULL_IMAGE
+                  """
+              }
+          }
+      }
+  }
+
+  stage('Deploy to Kubernetes') {
       steps {
           container('maven') {
               withKubeConfig(credentialsId: 'k8-cred') {
                   sh """
-                  sed -i 's|IMAGE_PLACEHOLDER|\$IMAGE|g' deployment-service.yaml
+                  sed -i 's|IMAGE_PLACEHOLDER|\$FULL_IMAGE|g' deployment-service.yaml
                   kubectl apply -f deployment-service.yaml
                   kubectl rollout status deployment/my-app --timeout=120s
                   """
@@ -96,6 +141,19 @@ volumes:
           }
       }
   }
+  ```
 
+  }
+
+  post {
+  always {
+  echo "Pipeline completed"
+  }
+  success {
+  echo "Build SUCCESS ✅"
+  }
+  failure {
+  echo "Build FAILED ❌"
+  }
   }
   }
