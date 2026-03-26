@@ -14,14 +14,14 @@ containers:
   command: ['cat']
   tty: true
 
-* name: docker
-  image: docker:24.0
+* name: kaniko
+  image: gcr.io/kaniko-project/executor:latest
   command: ['cat']
   tty: true
   volumeMounts:
 
-  * name: docker-sock
-    mountPath: /var/run/docker.sock
+  * name: kaniko-secret
+    mountPath: /kaniko/.docker
 
 * name: trivy
   image: aquasec/trivy:0.50.0
@@ -30,9 +30,9 @@ containers:
 
 volumes:
 
-* name: docker-sock
-  hostPath:
-  path: /var/run/docker.sock
+* name: kaniko-secret
+  secret:
+  secretName: docker-cred
   """
   }
   }
@@ -44,19 +44,11 @@ volumes:
   stages {
 
   ```
-  stage('Clean Workspace') {
+  stage('Checkout') {
       steps {
-          cleanWs()
-      }
-  }
-
-  stage('Git Checkout') {
-      steps {
-          retry(2) {
-              git branch: 'main',
-                  credentialsId: 'git-cred',
-                  url: 'https://github.com/fasil7170/Boardgame.git'
-          }
+          git branch: 'main',
+              credentialsId: 'git-cred',
+              url: 'https://github.com/fasil7170/Boardgame.git'
       }
   }
 
@@ -68,33 +60,22 @@ volumes:
       }
   }
 
-  stage('Test') {
+  stage('Docker Build & Push (Kaniko)') {
       steps {
-          container('maven') {
-              sh "mvn test"
+          container('kaniko') {
+              sh """
+              /kaniko/executor \
+                --dockerfile=Dockerfile \
+                --context=. \
+                --destination=\$IMAGE \
+                --insecure \
+                --skip-tls-verify
+              """
           }
       }
   }
 
-  stage('Docker Build & Push') {
-      steps {
-          container('docker') {
-              withCredentials([usernamePassword(
-                  credentialsId: 'docker-cred',
-                  usernameVariable: 'DOCKER_USER',
-                  passwordVariable: 'DOCKER_PASS'
-              )]) {
-                  sh """
-                  echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin
-                  docker build -t \$IMAGE .
-                  docker push \$IMAGE
-                  """
-              }
-          }
-      }
-  }
-
-  stage('Security Scan') {
+  stage('Scan') {
       steps {
           container('trivy') {
               sh "trivy image --exit-code 1 --severity HIGH,CRITICAL \$IMAGE"
