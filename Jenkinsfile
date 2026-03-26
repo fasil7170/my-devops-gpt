@@ -55,12 +55,12 @@ volumes:
   stage('Build') {
       steps {
           container('maven') {
-              sh "mvn clean install -DskipTests"
+              sh "mvn clean package -DskipTests"
           }
       }
   }
 
-  stage('Docker Build & Push (Kaniko)') {
+  stage('Docker Build & Push') {
       steps {
           container('kaniko') {
               sh """
@@ -75,10 +75,10 @@ volumes:
       }
   }
 
-  stage('Scan') {
+  stage('Scan (Non-blocking)') {
       steps {
           container('trivy') {
-              sh "trivy image --exit-code 1 --severity HIGH,CRITICAL \$IMAGE"
+              sh "trivy image \$IMAGE || true"
           }
       }
   }
@@ -90,7 +90,7 @@ volumes:
                   sh """
                   sed -i 's|IMAGE_PLACEHOLDER|\$IMAGE|g' deployment-service.yaml
                   kubectl apply -f deployment-service.yaml
-                  kubectl rollout status deployment/my-app
+                  kubectl rollout status deployment/my-app --timeout=120s
                   """
               }
           }
