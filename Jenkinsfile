@@ -45,7 +45,7 @@ volumes:
 
   stages {
 
-  ```
+  
   stage('Checkout') {
       steps {
           retry(2) {
@@ -141,7 +141,7 @@ volumes:
           }
       }
   }
-  ```
+  
 
   }
 
