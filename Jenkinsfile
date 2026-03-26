@@ -45,7 +45,7 @@ volumes:
 
   stages {
 
-  
+  ```
   stage('Checkout') {
       steps {
           retry(2) {
@@ -127,21 +127,7 @@ volumes:
           }
       }
   }
-
-  stage('Deploy to Kubernetes') {
-      steps {
-          container('maven') {
-              withKubeConfig(credentialsId: 'k8-cred') {
-                  sh """
-                  sed -i 's|IMAGE_PLACEHOLDER|\$FULL_IMAGE|g' deployment-service.yaml
-                  kubectl apply -f deployment-service.yaml
-                  kubectl rollout status deployment/my-app --timeout=120s
-                  """
-              }
-          }
-      }
-  }
-  
+  ```
 
   }
 
